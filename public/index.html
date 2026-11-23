@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Waqt · Dashboard</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Login -->
+  <main id="login" class="login hidden">
+    <div class="panel">
+      <span class="logo" id="login-logo"></span>
+      <h1>Sign in to your dashboard</h1>
+      <p class="muted" style="margin:0" id="login-hint">Use the API key you set as the <code>API_KEY</code> secret when you deployed.</p>
+      <form id="login-form">
+        <input id="login-key" type="password" placeholder="xxxxxxxx-xxxx-4xxx-xxxx-xxxxxxxxxxxx" autocomplete="current-password" required>
+        <button class="btn primary" type="submit">Open dashboard</button>
+        <div class="err" id="login-err"></div>
+      </form>
+    </div>
+  </main>
+
+  <!-- App -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="wrap">
+        <a class="logo" href="/" id="app-logo"></a>
+        <nav class="tabs">
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="ai">AI</button>
+          <button class="tab" data-tab="projects">Projects</button>
+          <button class="tab" data-tab="timesheets">Timesheets</button>
+          <button class="tab" data-tab="friends">Friends</button>
+          <button class="tab" data-tab="share">Share</button>
+          <button class="tab" data-tab="setup">Setup</button>
+          <button class="tab" data-tab="settings">Settings</button>
+        </nav>
+        <div class="spacer"></div>
+        <select id="range" aria-label="Date range">
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="last_7_days" selected>Last 7 days</option>
+          <option value="last_30_days">Last 30 days</option>
+          <option value="last_6_months">Last 6 months</option>
+          <option value="last_year">Last year</option>
+          <option value="all_time">All time</option>
+        </select>
+        <button class="btn small" id="logout" title="Sign out">Sign out</button>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div id="notice"></div>
+
+      <!-- Overview -->
+      <section data-view="overview">
+        <div class="grid tiles" id="tiles"></div>
+        <div class="grid two section hidden" id="goals"></div>
+        <div class="panel section" id="daily-panel">
+          <div class="panel-head"><h2>Coding time</h2><span class="muted" id="daily-sub"></span></div>
+          <div id="daily"></div>
+        </div>
+        <div class="grid two section">
+          <div class="panel"><div class="panel-head"><h2>Time of day</h2><span class="muted" id="persona"></span></div><div id="hours"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Days of the week</h2><span class="muted" id="best-weekday"></span></div><div id="weekdays"></div></div>
+        </div>
+        <div class="panel section">
+          <div class="panel-head"><h2>Last year</h2><span class="muted" id="heat-sub"></span></div>
+          <div id="heat"></div>
+        </div>
+        <div class="grid three section">
+          <div class="panel"><div class="panel-head"><h2>Projects</h2></div><div id="projects"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Languages</h2></div><div id="languages"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Editors</h2></div><div id="editors"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Activity</h2></div><div id="categories"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Operating systems</h2></div><div id="operating_systems"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Machines</h2></div><div id="machines"></div></div>
+          <div class="panel hidden" id="labels-panel"><div class="panel-head"><h2>Labels</h2></div><div id="labels"></div></div>
+        </div>
+      </section>
+
+      <!-- AI -->
+      <section data-view="ai" class="hidden">
+        <div class="grid tiles" id="ai-tiles"></div>
+        <div class="panel section">
+          <div class="panel-head"><h2>Lines changed</h2><span class="muted" id="ai-split-text"></span></div>
+          <div class="split" id="ai-split"></div>
+          <div class="legend" style="justify-content:flex-start;gap:16px;margin-top:10px"><span><i style="background:var(--accent)"></i> AI</span><span><i style="background:#22c55e"></i> You</span></div>
+        </div>
+        <div class="grid two section">
+          <div class="panel"><div class="panel-head"><h2>AI agent time per day</h2></div><div id="ai-daily"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Models</h2></div><div id="ai-models"></div></div>
+        </div>
+        <div class="panel section" id="ai-cost-panel">
+          <div class="panel-head"><h2>Cost estimate</h2><span class="muted" id="ai-cost-sub"></span></div>
+          <p class="muted" style="margin-top:0">What your AI token use would cost at API list prices, in US dollars per million tokens. Subscriptions like Claude Max or ChatGPT plans are flat-rate, so treat this as the value you got, not your bill. The longest matching name wins, so <code>Opus 5.5</code> is used before <code>Opus</code>.</p>
+          <div style="overflow-x:auto">
+            <table class="table" id="price-table">
+              <thead><tr><th>Model name starts with</th><th style="text-align:right">Input</th><th style="text-align:right">Output</th><th style="text-align:right">Cached input</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="ai-cost-models" style="margin-top:14px"></div>
+          <label class="check" style="margin-top:12px"><input type="checkbox" id="ai-cost-public"><span>Show the estimate on my public profile, cards and README</span></label>
+          <div class="row" style="margin-top:12px">
+            <button class="btn primary" id="price-save" type="button">Save prices</button>
+            <button class="btn" id="price-add" type="button">Add a model</button>
+            <button class="btn" id="price-reset" type="button">Reset to defaults</button>
+            <span class="err" id="price-err"></span>
+          </div>
+        </div>
+        <p class="faint" style="font-size:12.5px">AI data comes from editor plugins that report it (for example Claude Code, Cursor, Copilot and Codex through the WakaTime CLI). Uses the range picked at the top.</p>
+      </section>
+
+      <!-- Projects -->
+      <section data-view="projects" class="hidden">
+        <div id="proj-detail" class="hidden">
+          <div class="row" style="margin-top:22px;align-items:center">
+            <h2 id="pd-name" style="margin:0;font-size:20px"></h2><span class="muted" id="pd-label"></span>
+            <div class="spacer"></div>
+            <select id="pd-days" aria-label="Project range">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="365">Last year</option>
+              <option value="0">All time</option>
+            </select>
+            <button class="btn small" id="pd-close" type="button">Back to all projects</button>
+          </div>
+          <div class="grid tiles" id="pd-tiles"></div>
+          <div class="panel section"><div class="panel-head"><h2>Time per day</h2><span class="muted" id="pd-range"></span></div><div id="pd-daily"></div></div>
+          <div class="grid three section">
+            <div class="panel"><div class="panel-head"><h2>Branches</h2></div><div id="pd-branches"></div></div>
+            <div class="panel"><div class="panel-head"><h2>Languages</h2></div><div id="pd-languages"></div></div>
+            <div class="panel"><div class="panel-head"><h2>Editors</h2></div><div id="pd-editors"></div></div>
+          </div>
+          <div class="panel section">
+            <div class="panel-head"><h2>Files</h2><span class="muted">Paths relative to the project folder · the 40 busiest files per day are kept</span></div>
+            <div id="pd-files"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:22px" id="proj-list">
+          <div class="panel-head"><h2>Tidy up your projects</h2><span class="muted" id="proj-count"></span></div>
+          <p class="muted" style="margin-top:0">Click a project to see its files, branches and languages. <b>Show as</b> renames a project, and giving several projects the same name merges them (e.g. <code>deku-task-kit-gfkit</code> → <code>deku-task-kit</code>). <b>Label</b> groups projects, for example by client, for the Overview and Timesheets. <b>Hide</b> keeps a project out of your public profile and cards.</p>
+          <input type="text" id="proj-filter" placeholder="Filter projects…" style="max-width:320px;margin-bottom:12px">
+          <div style="overflow-x:auto">
+            <table class="table" id="proj-table">
+              <thead><tr><th>Project</th><th style="text-align:right">All time</th><th>Show as</th><th>Label</th><th style="text-align:center">Hide</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <datalist id="label-options"></datalist>
+          <div class="row" style="margin-top:14px"><button class="btn primary" id="proj-save" type="button">Save changes</button><span class="err" id="proj-err"></span></div>
+        </div>
+      </section>
+
+      <!-- Friends -->
+      <section data-view="friends" class="hidden">
+        <div class="panel" style="margin-top:22px">
+          <div class="panel-head"><h2>Leaderboard</h2>
+            <select id="fr-range" aria-label="Leaderboard range"><option value="last_7_days">Last 7 days</option><option value="last_30_days">Last 30 days</option></select>
+          </div>
+          <div id="fr-board"></div>
+          <p class="faint" style="font-size:12.5px;margin-bottom:0">Only you see this. Friends' numbers come from their public stats and refresh every 10 minutes.</p>
+        </div>
+        <div class="panel section">
+          <div class="panel-head"><h2>Your friends</h2><span class="muted" id="fr-count"></span></div>
+          <p class="muted" style="margin-top:0">Add anyone with a public Waqt (their address, e.g. <code>https://waqt.example.com</code>) or a WakaTime profile with public stats (e.g. <code>https://wakatime.com/@name</code>). To be on their board, send them <b id="fr-you"></b> and keep <i>Public profile and cards</i> on in Settings.</p>
+          <div id="fr-list" style="display:grid;gap:8px"></div>
+          <div class="row" style="margin-top:12px">
+            <button class="btn" id="fr-add" type="button">Add a friend</button>
+            <button class="btn primary" id="fr-save" type="button">Save friends</button>
+            <span class="err" id="fr-err"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Timesheets -->
+      <section data-view="timesheets" class="hidden">
+        <div class="panel" style="margin-top:22px">
+          <div class="panel-head"><h2>Timesheet</h2><span class="muted" id="ts-range-text"></span></div>
+          <div class="row" style="margin-bottom:16px">
+            <label>Period
+              <select id="ts-preset">
+                <option value="this_week">This week</option>
+                <option value="last_week">Last week</option>
+                <option value="this_month" selected>This month</option>
+                <option value="last_month">Last month</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </label>
+            <label class="ts-custom hidden">From <input type="date" id="ts-start"></label>
+            <label class="ts-custom hidden">To <input type="date" id="ts-end"></label>
+            <label>Group by
+              <select id="ts-group"><option value="label">Label (client)</option><option value="project">Project</option></select>
+            </label>
+            <label>Round each day up to
+              <select id="ts-round"><option value="0">No rounding</option><option value="6">6 mins</option><option value="15" selected>15 mins</option><option value="30">30 mins</option><option value="60">1 hour</option></select>
+            </label>
+            <label>Currency
+              <select id="ts-currency"><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option><option>AED</option><option>CAD</option><option>AUD</option><option>SGD</option><option>JPY</option></select>
+            </label>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="table" id="ts-table">
+              <thead><tr><th>Client / project</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate / hr</th><th style="text-align:right">Amount</th></tr></thead>
+              <tbody></tbody>
+              <tfoot></tfoot>
+            </table>
+          </div>
+          <p class="faint" style="font-size:12.5px">Rates are set per label. Give projects a label (like a client name) in the Projects tab.</p>
+          <div class="row" style="margin-top:6px">
+            <button class="btn" id="ts-save-rates" type="button">Save rates</button>
+            <button class="btn" id="ts-csv" type="button">Export CSV</button>
+            <label>Invoice for <select id="ts-bill"></select></label>
+            <button class="btn primary" id="ts-invoice" type="button">Print invoice</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Share -->
+      <section data-view="share" class="hidden">
+        <div class="banner" style="border-left-color:var(--accent);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <span><b>Waqt Wrapped:</b> your year in code as shareable slides and an image.</span>
+          <a class="btn small primary" id="wrapped-link" href="/wrapped/" target="_blank" rel="noopener">Open my Wrapped</a>
+        </div>
+        <div class="grid two" style="margin-top:22px">
+          <div class="panel">
+            <div class="panel-head"><h2>README card builder</h2><span class="muted">Live preview</span></div>
+            <div class="row" style="margin-bottom:14px">
+              <label>Card
+                <select id="c-kind">
+                  <option value="languages">Top languages</option>
+                  <option value="stats">Coding stats</option>
+                  <option value="wrapped">Year in review (Wrapped)</option>
+                  <option value="heatmap">Activity heatmap</option>
+                  <option value="editors">Editors</option>
+                  <option value="categories">Activity types</option>
+                  <option value="os">Operating systems</option>
+                  <option value="projects">Projects</option>
+                  <option value="hours">Time of day</option>
+                  <option value="ai">AI coding</option>
+                  <option value="badge">Badge</option>
+                </select>
+              </label>
+              <label>Range
+                <select id="c-range">
+                  <option value="today">Today</option>
+                  <option value="last_7_days" selected>Last 7 days</option>
+                  <option value="last_30_days">Last 30 days</option>
+                  <option value="last_6_months">Last 6 months</option>
+                  <option value="last_year">Last year</option>
+                  <option value="all_time">All time</option>
+                </select>
+              </label>
+              <label>Theme
+                <select id="c-theme">
+                  <option value="auto">Auto (follows viewer)</option>
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                  <option value="transparent">Transparent</option>
+                </select>
+              </label>
+              <label>Layout
+                <select id="c-layout"><option value="list">List</option><option value="compact">Compact</option></select>
+              </label>
+              <label>Items
+                <select id="c-count"><option>4</option><option selected>6</option><option>8</option><option>10</option></select>
+              </label>
+            </div>
+            <div class="preview" id="c-preview"></div>
+            <h3 style="font-size:13px;margin:16px 0 8px">Markdown (GitHub README)</h3>
+            <div class="code" id="c-md"></div>
+            <h3 style="font-size:13px;margin:16px 0 8px">HTML (any website)</h3>
+            <div class="code" id="c-html"></div>
+          </div>
+          <div>
+            <div class="panel">
+              <div class="panel-head"><h2>Public profile page</h2></div>
+              <p class="muted" style="margin-top:0">A shareable page with your stats. Project names stay hidden unless you allow them in Settings.</p>
+              <div class="code" id="p-link"></div>
+              <h3 style="font-size:13px;margin:16px 0 8px">Embed on your website</h3>
+              <div class="code" id="p-iframe"></div>
+              <p class="faint" style="font-size:12.5px">Options: <code>range</code> (last_7_days, last_30_days, last_year, all_time), <code>theme</code> (auto, dark, light), <code>sections</code> (stats, heatmap, daily, hours, ai, languages, editors, categories, os, projects).</p>
+            </div>
+            <div class="panel section">
+              <div class="panel-head"><h2>Works with existing tools</h2></div>
+              <p class="muted" style="margin-top:0">Waqt speaks the WakaTime API, so tools built for WakaTime work too.</p>
+              <h3 style="font-size:13px;margin:12px 0 8px">github-readme-stats</h3>
+              <div class="code" id="t-grs"></div>
+              <h3 style="font-size:13px;margin:16px 0 8px">waka-readme GitHub Action</h3>
+              <div class="code" id="t-waka"></div>
+            </div>
+            <div class="panel section">
+              <div class="panel-head"><h2>Stats block in your profile README</h2></div>
+              <p class="muted" style="margin-top:0">A text block with languages, editors, projects, time of day, AI use and streak, refreshed by a GitHub Action. 1) Add these two lines to your README:</p>
+              <div class="code" id="r-markers"></div>
+              <p class="muted">2) Add your Waqt key as a repository secret named <code>WAQT_API_KEY</code> (optional; without it only public stats are used). 3) Save this as <code>.github/workflows/waqt.yml</code>:</p>
+              <div class="code" id="r-workflow"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Setup -->
+      <section data-view="setup" class="hidden">
+        <div class="grid two" style="margin-top:22px">
+          <div class="panel">
+            <div class="panel-head"><h2>Connect your editors</h2></div>
+            <ol style="padding-left:18px;margin:0;display:grid;gap:14px">
+              <li>Install the free WakaTime plugin for your editor from <a href="https://wakatime.com/plugins" target="_blank" rel="noopener">wakatime.com/plugins</a> (VS Code, Cursor, JetBrains, Vim, Neovim, Sublime, Xcode, terminals, browsers and more). You don't need a WakaTime account.</li>
+              <li>Put this in <code>~/.wakatime.cfg</code> (on Windows: <code>%USERPROFILE%\.wakatime.cfg</code>):
+                <div class="code" id="cfg" style="margin-top:8px"></div>
+                <div class="row" style="margin-top:8px">
+                  <input type="text" id="newkey-name" maxlength="60" placeholder="Name this device, e.g. Work laptop" style="flex:1;min-width:180px">
+                  <button class="btn small primary" id="newkey" type="button">Create a key for this device</button>
+                </div>
+                <p class="hint" id="newkey-hint" style="margin:8px 0 0">Each device gets its own key that can only send activity and read your stats, and you can revoke it in Settings. Your main key (the <code>API_KEY</code> secret) works too.</p>
+              </li>
+              <li>Restart your editor and code for a couple of minutes. Your status bar shows today's time, and this dashboard fills in.</li>
+            </ol>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Status</h2></div>
+            <dl class="kv" id="status"></dl>
+            <p class="faint" style="font-size:12.5px">Raw activity is kept for your retention window; daily totals are kept forever, so your full history stays. Everything lives in your own Cloudflare account.</p>
+            <h3 style="font-size:13px;margin:18px 0 6px">Keep WakaTime too (optional)</h3>
+            <p class="muted" style="margin:0;font-size:13px">Your editor can only send to one server, so Waqt can pass every heartbeat on to WakaTime for you. In Cloudflare, open this Worker → <b>Settings → Variables and Secrets → Add</b>, choose <b>Secret</b>, name it <code>WAKATIME_API_KEY</code> and paste your Secret API Key from <a href="https://wakatime.com/api-key" target="_blank" rel="noopener">wakatime.com/api-key</a>. New activity then goes to both. (Importing history uses a different credential: see below.)</p>
+          </div>
+        </div>
+        <div class="panel section" id="usage-panel">
+          <div class="panel-head"><h2>Cloudflare free plan usage</h2><span class="muted" id="usage-day"></span></div>
+          <div class="grid two" id="usage-meters" style="gap:14px 28px"></div>
+          <p class="faint" style="font-size:12.5px;margin-bottom:0">Estimates counted by Waqt itself (slightly low, never high). Daily limits reset at 00:00 UTC. Static pages like this dashboard don't count as requests.</p>
+        </div>
+
+        <div class="panel section" id="inspector">
+          <div class="panel-head"><h2>Recent heartbeats</h2>
+            <div class="row">
+              <select id="hb-project"><option value="">All projects</option></select>
+              <button class="btn small" id="hb-refresh" type="button">Refresh</button>
+              <button class="btn small" id="hb-reparse" type="button" title="Re-read editor, OS and AI model from the stored user agents">Re-read user agents</button>
+            </div>
+          </div>
+          <p class="muted" style="margin-top:0;font-size:13px">Exactly what your editors sent, newest first. Odd values are highlighted, so plugin quirks are easy to spot. Hover a row to see the full file path and user agent.</p>
+          <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+            <table class="table" id="hb-table">
+              <thead><tr><th>Time</th><th>Project</th><th>Language</th><th>Editor</th><th>Activity</th><th>AI model</th><th>File</th><th>OS / machine</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="muted" id="hb-status" style="font-size:12.5px;margin-top:8px"></div>
+        </div>
+
+        <div class="panel section" id="import-panel">
+          <div class="panel-head"><h2>Import your WakaTime history</h2><span class="muted" id="import-summary"></span></div>
+          <p class="muted" style="margin-top:0">Bring your past coding time over from WakaTime. Only activity from before Waqt's first heartbeat (<b id="import-cutoff">—</b>) is imported, so nothing is counted twice. Your browser does the counting, then Waqt stores compact daily totals.</p>
+          <div id="import-nokey" class="banner hidden" style="margin:0 0 14px">To import automatically, copy your personal token from <a href="https://wakatime.com/oauth" target="_blank" rel="noopener">wakatime.com/oauth</a> and add it as the Secret <code>WAKATIME_OAUTH_TOKEN</code> (Cloudflare → this Worker → Settings → Variables and Secrets). WakaTime only lets API keys send activity, not read it. You can also upload an export file instead.</div>
+          <div class="row">
+            <button class="btn primary" id="import-start" type="button">Import from WakaTime</button>
+            <label class="btn" style="cursor:pointer">Use an export file<input type="file" id="import-file" accept=".json,application/json" hidden></label>
+            <button class="btn" id="import-remove" type="button">Remove imported data</button>
+            <button class="btn" id="waka-check" type="button">Test the WakaTime key</button>
+          </div>
+          <div id="waka-check-result" class="hidden" style="margin-top:12px;font-size:13.5px"></div>
+          <div id="import-progress" class="hidden" style="margin-top:16px">
+            <div class="track" style="height:8px;background:var(--panel-2);border-radius:5px;overflow:hidden"><div id="import-bar" style="height:100%;width:0;background:var(--accent);transition:width .3s"></div></div>
+            <div class="muted" id="import-status" style="margin-top:8px;font-size:13px"></div>
+          </div>
+        </div>
+
+        <div class="panel section" id="backup-panel">
+          <div class="panel-head"><h2>Backups</h2><span class="muted" id="backup-summary"></span></div>
+          <p class="muted" style="margin-top:0">A backup holds your full history (the daily totals behind every chart, card and API answer) and your settings. Secrets such as report webhooks are left out, and so are raw heartbeats.</p>
+          <p class="muted"><b>Automatic weekly backups:</b> in your <b>private</b> GitHub copy of Waqt, go to Settings → Secrets and variables → Actions and add the secret <code>WAQT_API_KEY</code> (a backup key: create one below) and the variable <code>WAQT_URL</code> (<span id="backup-url"></span>). Every Sunday the <i>Back up Waqt</i> workflow saves one as a release, keeping the last 12. A backup key can only download backups.</p>
+          <div id="backup-key" class="code hidden" style="margin-bottom:12px"></div>
+          <div class="row">
+            <button class="btn primary" id="backup-download" type="button">Download a backup</button>
+            <label class="btn" style="cursor:pointer">Restore a backup<input type="file" id="backup-file" accept=".gz,.json,application/json,application/gzip" hidden></label>
+            <button class="btn" id="backup-key-new" type="button">Create a backup key</button>
+          </div>
+          <div id="backup-progress" class="hidden" style="margin-top:16px">
+            <div class="track" style="height:8px;background:var(--panel-2);border-radius:5px;overflow:hidden"><div id="backup-bar" style="height:100%;width:0;background:var(--accent);transition:width .3s"></div></div>
+            <div class="muted" id="backup-status" style="margin-top:8px;font-size:13px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section data-view="settings" class="hidden">
+        <form class="panel" id="settings-form" style="margin-top:22px;max-width:720px">
+          <div class="panel-head"><h2>Settings</h2></div>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="s-display">Display name</label><input id="s-display" type="text" maxlength="60" placeholder="Your name"></div>
+            <div class="field"><label for="s-username">Username</label><input id="s-username" type="text" maxlength="39"><span class="hint">Used in public API URLs. Any value works.</span></div>
+          </div>
+          <div class="field">
+            <label for="s-tz">Time zone</label>
+            <select id="s-tz" style="width:100%"></select>
+            <span class="hint">Decides where each day starts. Detected from your editor at first. Changing it rebuilds your recent history in the background.</span>
+          </div>
+          <label class="check"><input type="checkbox" id="s-public"><span><b>Public profile and cards</b><br><span class="muted">Needed for README cards, badges and the embeddable profile.</span></span></label>
+          <label class="check"><input type="checkbox" id="s-public-projects"><span><b>Show project names publicly</b><br><span class="muted">Off by default. Machine names and file paths are never public.</span></span></label>
+          <div class="field">
+            <label for="s-hidden">Always hide these projects from public views</label>
+            <textarea id="s-hidden" placeholder="client-work&#10;secret-startup"></textarea>
+            <span class="hint">One project per line. Their time still counts in totals.</span>
+          </div>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="s-timeout">Idle timeout (minutes)</label><input id="s-timeout" type="number" min="1" max="120"><span class="hint">Gaps longer than this between heartbeats aren't counted. WakaTime uses 15.</span></div>
+            <div class="field"><label for="s-retention">Keep raw activity (days)</label><input id="s-retention" type="number" min="0"><span class="hint">0 = forever. Daily totals are always kept. 365 keeps you well inside the free plan.</span></div>
+          </div>
+          <h3 class="form-h">Goals</h3>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="s-goal-day">Daily goal</label>
+              <select id="s-goal-day" style="width:100%"><option value="0">Off</option><option value="30">30 mins</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option><option value="300">5 hours</option><option value="360">6 hours</option><option value="480">8 hours</option></select></div>
+            <div class="field"><label for="s-goal-week">Weekly goal (hours)</label><input id="s-goal-week" type="number" min="0" max="168" placeholder="0 = off"></div>
+          </div>
+          <label class="check"><input type="checkbox" id="s-statusbar-goal"><span><b>Show daily goal progress in my editor</b><br><span class="muted">The status bar shows e.g. <code>1 hr 20 mins · 67% of 2 hrs</code>, then <code>goal ✓</code>.</span></span></label>
+
+          <h3 class="form-h">Reports and reminders</h3>
+          <p class="hint" style="margin:-6px 0 12px">Sent to Discord and/or Telegram. The weekly report arrives every Monday at 9:00 your time: last week's total, goals, top languages and projects, AI use and streak.</p>
+          <label class="check"><input type="checkbox" id="s-report"><span><b>Send me a weekly report</b></span></label>
+          <label class="check"><input type="checkbox" id="s-nudge-goal"><span><b>Tell me when I reach my daily or weekly goal</b></span></label>
+          <label class="check"><input type="checkbox" id="s-nudge-streak"><span><b>Remind me when my streak is about to end</b><br><span class="muted">If you haven't coded yet today by <select id="s-nudge-hour" style="padding:2px 6px"></select> and have a streak of 2 days or more.</span></span></label>
+          <div class="field"><label for="s-discord">Discord webhook URL</label><input id="s-discord" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" placeholder="https://discord.com/api/webhooks/…"><span class="hint">In Discord: Server settings → Integrations → Webhooks → New webhook → Copy URL.</span></div>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="s-tg-token">Telegram bot token</label><input id="s-tg-token" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" placeholder="123456789:ABC…"><span class="hint">In Telegram, message @BotFather: send /newbot, pick a name, and paste the token it gives you. Then open your new bot and tap Start.</span></div>
+            <div class="field"><label for="s-tg-chat">Telegram chat ID</label><input id="s-tg-chat" type="text" placeholder="e.g. 123456789"><span class="hint">Message @userinfobot and paste the Id it replies with.</span></div>
+          </div>
+          <div class="row" style="margin-bottom:18px"><button class="btn" type="button" id="s-report-test">Send a test report</button><span class="muted" id="s-report-result" style="font-size:13px"></span></div>
+
+          <div class="row"><button class="btn primary" type="submit">Save settings</button><span class="err" id="s-err"></span></div>
+        </form>
+
+        <div class="panel section" id="security" style="max-width:720px">
+          <div class="panel-head"><h2>Sign-in and device keys</h2></div>
+          <h3 class="form-h" style="margin-top:0">Dashboard password</h3>
+          <p class="hint" style="margin:-6px 0 12px" id="pw-state"></p>
+          <div class="grid two" style="gap:0 16px">
+            <div class="field"><label for="pw-new">New password</label><input id="pw-new" type="password" autocomplete="new-password" minlength="10" placeholder="At least 10 characters"></div>
+            <div class="field"><label for="pw-again">Repeat it</label><input id="pw-again" type="password" autocomplete="new-password"></div>
+          </div>
+          <div class="row"><button class="btn primary" id="pw-save" type="button">Set password</button><button class="btn hidden" id="pw-remove" type="button">Remove password</button><span class="err" id="pw-err"></span></div>
+
+          <h3 class="form-h">Device and backup keys</h3>
+          <p class="hint" style="margin:-6px 0 12px">Device keys are for your editors: they send activity and read stats. Backup keys only download backups, for the weekly GitHub Action. Neither can open this dashboard or change anything. Create them in Setup.</p>
+          <div style="overflow-x:auto"><table class="table" id="keys-table"><thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody></tbody></table></div>
+
+          <h3 class="form-h">Signed-in browsers</h3>
+          <div id="sessions"></div>
+          <div class="row" style="margin-top:10px"><button class="btn" id="sessions-end" type="button">Sign out other browsers</button></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="invoice" class="invoice"></div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+# Changelog
+
+Every Waqt release, newest first. Deployed copies pick these up through the
+**Update Waqt** workflow (Actions → Update Waqt → Run workflow), and the
+dashboard tells you when a new version is out.
+
+## 1.3.0 · 2026-11-18
+
+### New
+- **Backup keys.** Setup → Backups → **Create a backup key** makes a key that can only download backups. Use it as the `WAQT_API_KEY` secret for the weekly *Back up Waqt* workflow, instead of your main key. When a backup is refused, the error now says which key to use.
+
+### Improved
+- GitHub workflows use `actions/checkout@v7` and `actions/setup-node@v7`, which run on Node 24 (no more Node 20 deprecation warnings).
+
+## 1.2.1 · 2026-11-11
+
+### Fixed
+- When the free plan's daily database limit is used up, Waqt says so (instead of "Database is not ready") and asks editors to resend later, so no activity is lost.
+- The Telegram fields accept what you paste from BotFather and @userinfobot (the whole message is fine) and explain clearly what's wrong otherwise.
+- **Importing again no longer rewrites everything.** Waqt compares with what's stored and writes only days and rows that changed, so a repeat import of the same history costs almost no writes (it used to rewrite every row, about 70,000 for a year). Recalculating today's totals works the same way and reads far less.
+- **Far fewer database reads**, so busy days stay inside the free plan's 5 million a day. A year of stats reads each row about four times instead of sixteen, long ranges in the dashboard are cached for 5 minutes, and the Setup and Settings pages no longer count whole tables (the heartbeat count, backup info and import totals now cost a handful of reads).
+- Browser extensions and web-view apps (user agents starting with `Mozilla/5.0`) now show as Chrome, Safari, Firefox, Edge, Slack and so on, instead of "AppleWebKit", and imports no longer list "Mozilla" as an AI model.
+- AI model names stored before Waqt kept raw user agents are tidied, e.g. "Opus 5-5" becomes "Opus 5.5".
+- WakaTime now only accepts API keys from plugins, so importing needs your personal OAuth token: add it as a new optional Secret, `WAKATIME_OAUTH_TOKEN` (from wakatime.com/oauth). `WAKATIME_API_KEY` stays for forwarding. **Setup → Test the WakaTime key** checks both, and errors from WakaTime now include WakaTime's own reason.
+
+## 1.2.0 · 2026-11-11
+
+### New
+- **Device keys and a dashboard sign-in.** Give each editor its own key (Setup → Create a key for this device) that can only send activity and read stats, and revoke it any time. The dashboard now signs in with a password or the main key into a secure session cookie, instead of keeping the key in the browser. Settings lists signed-in browsers and can sign out the others.
+- **Waqt Wrapped.** `/wrapped/` turns a year of coding into shareable slides, ending with a card you can download as an image, post, or embed (`/card/wrapped.svg?year=2026`).
+- **Friends leaderboard.** Compare the last 7 or 30 days with friends who have a public Waqt or WakaTime profile.
+- **Files and branches per project.** Click a project in the Projects tab to see its daily time, branches, languages, editors and busiest files.
+- **Backups.** Download or restore a backup from Setup, or turn on the weekly *Back up Waqt* workflow, which saves one as a release in your private repository.
+- **AI cost estimate.** An editable price table turns token counts into what the same use would cost at API list prices. Private unless you choose to show it.
+- **Goal and streak nudges.** Discord or Telegram messages when you reach a daily or weekly goal, or when a streak is about to end; optional goal progress in the editor status bar.
+- **Free-plan usage meter.** Setup shows requests, database reads and writes and database size against Cloudflare's free limits, with a warning on the Overview at 70%.
+- **Heartbeat inspector.** The latest heartbeats exactly as stored, with the raw user agent, to spot plugin quirks.
+- **Version check.** The dashboard shows the running version and when a newer one is out.
+
+### Improved
+- Importing from WakaTime no longer misses the days between an older WakaTime export and Waqt's first heartbeat: they are fetched one day at a time.
+- The README walks through every field of Cloudflare's setup screen and has an after-deploy checklist.
+- The raw user agent of every heartbeat is kept, and old heartbeats are re-read automatically whenever the parser learns something new.
+- The update workflow no longer fails when workflow files change upstream; it lists them for you, or applies them with a `WAQT_UPDATE_TOKEN` secret. Its commits and pull requests now name the version.
+
+## 1.1.0 · 2026-11-11
+
+### New
+- Import your history from WakaTime (in the browser, nothing counted twice).
+- AI insights: agent time, AI vs human lines, sessions, tokens and models.
+- Time of day, days of the week and your "Night Owl" or "Early Bird" persona.
+- Projects tab to rename, merge, label and hide projects.
+- Daily and weekly goals, and a weekly report to Discord or Telegram.
+- Timesheets with hourly rates, CSV export and printable invoices.
+- A GitHub Action that writes your stats into a profile README.
+- A weekly workflow that keeps deployed copies up to date.
+- Automated tests and CI.
+- Database migrations apply themselves if a deploy skipped them.
+
+### Fixed
+- `<<LAST_LANGUAGE>>` from browser and desktop plugins, AI model names shown as editors, and desktop-app editor names.
+
+## 1.0.0 · 2026-11-11
+
+First release: a WakaTime-compatible API on Cloudflare Workers and D1, a private dashboard, a shareable public profile with embed mode, README cards and badges, optional forwarding to WakaTime, and a Deploy to Cloudflare button.

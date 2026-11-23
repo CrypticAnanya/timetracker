@@ -1,0 +1,262 @@
+// Shared by the Worker (live data) and the browser (WakaTime import), so both
+// count time exactly the same way.
+
+/**
+ * @typedef {Object} Beat
+ * @property {number} time        unix seconds
+ * @property {string} project
+ * @property {string} language
+ * @property {string} editor
+ * @property {string} os
+ * @property {string} machine
+ * @property {string} category
+ * @property {string} [ai_model]
+ * @property {string} [ai_session]
+ * @property {number|null} [ai_input_tokens]
+ * @property {number|null} [ai_output_tokens]
+ * @property {number|null} [ai_cached_tokens]
+ * @property {number|null} [ai_prompt_length]
+ * @property {number|null} [ai_line_changes]
+ * @property {number|null} [human_line_changes]
+ * @property {string} [entity]   file path, domain or app
+ * @property {string} [type]     'file' | 'domain' | 'url' | 'app'
+ * @property {string} [branch]
+ */
+
+/**
+ * @typedef {Object} DaySummary
+ * @property {Array<[string,string,string,string,string,string,number,number,number]>} rows
+ *   [project, language, editor, os, machine, category, seconds, ai_lines, human_lines]
+ * @property {Array<[number, number]>} hours  [hour 0-23, seconds]
+ * @property {Array<[string,number,number,number,number,number,number,number]>} ai
+ *   [model, seconds, sessions, prompts, input_tokens, output_tokens, cached_tokens, ai_lines]
+ * @property {Array<[string,string,string,number]>} files  [project, branch, entity, seconds]
+ */
+
+const round3 = (n) => Math.round(n * 1000) / 1000;
+
+// ---------- time zones (days are "YYYY-MM-DD" in the user's zone) ----------
+
+/** @type {Map<string, Intl.DateTimeFormat>} */
+const formatters = new Map();
+function formatter(tz) {
+  let f = formatters.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    formatters.set(tz, f);
+  }
+  return f;
+}
+function zonedParts(ms, tz) {
+  /** @type {Record<string, number>} */
+  const o = {};
+  for (const p of formatter(tz).formatToParts(new Date(ms))) if (p.type !== 'literal') o[p.type] = Number(p.value);
+  return { y: o.year, m: o.month, d: o.day, h: o.hour % 24, mi: o.minute, s: o.second };
+}
+function offsetMs(ms, tz) {
+  const p = zonedParts(ms, tz);
+  return Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi, p.s) - Math.floor(ms / 1000) * 1000;
+}
+const pad = (n) => String(n).padStart(2, '0');
+
+/** Day string for a unix timestamp (seconds) in the given zone. @returns {string} */
+export function dayOf(epochSeconds, tz) {
+  const p = zonedParts(epochSeconds * 1000, tz);
+  return `${p.y}-${pad(p.m)}-${pad(p.d)}`;
+}
+
+/** Unix timestamp (seconds) of local midnight at the start of `day`. @returns {number} */
+export function dayStart(day, tz) {
+  const [y, m, d] = day.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d);
+  const first = offsetMs(guess, tz);
+  let start = guess - first;
+  const second = offsetMs(start, tz);
+  if (second !== first) start = guess - second;
+  return start / 1000;
+}
+
+/** @returns {string} */
+export function addDays(day, n) {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+/** Files kept per project per day; the rest are added up as one "other files" row (entity ""). */
+export const FILES_PER_PROJECT = 40;
+
+/**
+ * A file path relative to its project folder ("src/index.ts"), so stored paths are
+ * short and don't reveal where things live on disk. Domains and apps stay as they are.
+ * @returns {string}
+ */
+export function relativeEntity(entity, type, project) {
+  if (!entity) return '';
+  if (type && type !== 'file') return entity.slice(0, 300);
+  const path = entity.replace(/\\/g, '/');
+  if (project) {
+    const i = path.indexOf('/' + project + '/');
+    if (i >= 0) return path.slice(i + project.length + 2).slice(-300);
+  }
+  // Unknown project root: keep the last three parts of the path.
+  return path.split('/').filter(Boolean).slice(-3).join('/').slice(-300);
+}
+
+/**
+ * Turn one day's heartbeats (sorted by time) into totals. Each heartbeat is credited
+ * with the gap until the next one if that gap is within `timeout` seconds, the way
+ * WakaTime counts time. Heartbeats at or after `end` are only used as the "next" one.
+ *
+ * @param {Beat[]} beats
+ * @param {number} start  local midnight (unix seconds)
+ * @param {number} end    next local midnight (unix seconds)
+ * @param {number} timeout seconds
+ * @returns {DaySummary}
+ */
+export function summarizeDay(beats, start, end, timeout) {
+  /** @type {Map<string, any[]>} */
+  const combos = new Map();
+  const hours = new Array(24).fill(0);
+  /** @type {Map<string, {seconds:number, sessions:Set<string>, prompts:number, inTok:number, outTok:number, cached:number, lines:number}>} */
+  const ai = new Map();
+  /** @type {Map<string, [string,string,string,number]>} */
+  const files = new Map();
+
+  for (let i = 0; i < beats.length; i++) {
+    const h = beats[i];
+    if (h.time >= end) break;
+    if (h.time < start) continue;
+    const next = beats[i + 1];
+    let credit = 0;
+    if (next && next.time - h.time <= timeout) credit = Math.min(next.time, end) - h.time;
+
+    const key = `${h.project}\u0000${h.language}\u0000${h.editor}\u0000${h.os}\u0000${h.machine}\u0000${h.category}`;
+    let row = combos.get(key);
+    if (!row) {
+      row = [h.project, h.language, h.editor, h.os, h.machine, h.category, 0, 0, 0];
+      combos.set(key, row);
+    }
+    row[6] += credit;
+    row[7] += h.ai_line_changes || 0;
+    row[8] += h.human_line_changes || 0;
+
+    if (credit > 0 && h.entity !== undefined) {
+      const entity = relativeEntity(h.entity || '', h.type, h.project);
+      const fkey = `${h.project}\u0000${h.branch || ''}\u0000${entity}`;
+      let f = files.get(fkey);
+      if (!f) {
+        f = [h.project, h.branch || '', entity, 0];
+        files.set(fkey, f);
+      }
+      f[3] += credit;
+    }
+
+    // Spread the credited time over the local hours it covers.
+    let t = h.time;
+    let left = credit;
+    while (left > 0) {
+      const hour = Math.min(23, Math.max(0, Math.floor((t - start) / 3600)));
+      const hourEnd = start + (hour + 1) * 3600;
+      const slice = hour === 23 ? left : Math.min(left, hourEnd - t);
+      hours[hour] += slice;
+      t += slice;
+      left -= slice;
+    }
+
+    const isAi =
+      !!h.ai_model ||
+      !!h.ai_session ||
+      !!h.ai_input_tokens ||
+      !!h.ai_output_tokens ||
+      !!h.ai_line_changes ||
+      h.category === 'ai coding';
+    if (isAi) {
+      const model = h.ai_model || '';
+      let a = ai.get(model);
+      if (!a) {
+        a = { seconds: 0, sessions: new Set(), prompts: 0, inTok: 0, outTok: 0, cached: 0, lines: 0 };
+        ai.set(model, a);
+      }
+      // AI *time* is agent activity (WakaTime's "AI coding" category or a reported model);
+      // AI-edited lines inside normal coding still count as lines, not time.
+      if (h.category === 'ai coding' || h.ai_model) a.seconds += credit;
+      if (h.ai_session) a.sessions.add(h.ai_session);
+      if ((h.ai_prompt_length || 0) > 0) a.prompts++;
+      a.inTok += h.ai_input_tokens || 0;
+      a.outTok += h.ai_output_tokens || 0;
+      a.cached += h.ai_cached_tokens || 0;
+      a.lines += h.ai_line_changes || 0;
+    }
+  }
+
+  return {
+    rows: [...combos.values()]
+      .filter((r) => r[6] > 0 || r[7] || r[8])
+      .map((r) => {
+        r[6] = round3(r[6]);
+        return /** @type {any} */ (r);
+      }),
+    hours: hours.map((s, h) => /** @type {[number, number]} */ ([h, round3(s)])).filter(([, s]) => s > 0),
+    ai: [...ai.entries()]
+      .map(([model, a]) => /** @type {[string,number,number,number,number,number,number,number]} */ ([
+        model,
+        round3(a.seconds),
+        a.sessions.size,
+        a.prompts,
+        a.inTok,
+        a.outTok,
+        a.cached,
+        a.lines,
+      ]))
+      .filter((r) => r.slice(1).some((v) => v)),
+    files: topFiles([...files.values()]),
+  };
+}
+
+/** Keep the busiest files of each project; add up the rest per project and branch. */
+function topFiles(list) {
+  list.sort((a, b) => b[3] - a[3]);
+  /** @type {Map<string, number>} */
+  const kept = new Map();
+  /** @type {Map<string, [string,string,string,number]>} */
+  const other = new Map();
+  /** @type {Array<[string,string,string,number]>} */
+  const out = [];
+  for (const f of list) {
+    const n = kept.get(f[0]) || 0;
+    if (n < FILES_PER_PROJECT && f[2]) {
+      kept.set(f[0], n + 1);
+      out.push([f[0], f[1], f[2], round3(f[3])]);
+    } else {
+      const k = `${f[0]}\u0000${f[1]}`;
+      const o = other.get(k) || [f[0], f[1], '', 0];
+      o[3] += f[3];
+      other.set(k, o);
+    }
+  }
+  for (const o of other.values()) out.push([o[0], o[1], '', round3(o[3])]);
+  return out.filter((f) => f[3] > 0);
+}
+
+/** Turn an AI user-agent token like "opus/4.1-medium" into a friendly name. */
+export function prettyModel(token) {
+  if (!token) return '';
+  const [family, version = ''] = token.split('/');
+  const names = { gpt: 'GPT', o: 'o', glm: 'GLM' };
+  const fam = names[family.toLowerCase()] ?? family.charAt(0).toUpperCase() + family.slice(1);
+  return version ? `${fam} ${version}` : fam;
+}
+
+/** Group a model name into its family for charts: "Opus 4.1-medium" → "Opus". */
+export function modelFamily(name) {
+  return (name || '').split(' ')[0] || 'Unknown';
+}
